@@ -1,0 +1,14 @@
+# data is never committed - the source files are far too large and were supplied for coursework
+*.csv
+*.json
+*.parquet
+*.zip
+
+# spark / jupyter scratch
+.ipynb_checkpoints/
+spark-warehouse/
+metastore_db/
+derby.log
+__pycache__/
+.DS_Store
+Thumbs.db
