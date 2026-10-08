@@ -1,6 +1,6 @@
 # Melbourne Parking & Congestion Analysis with PySpark
 
-Processing **72.9 million on-street parking sensor records (9.2 GB)** with Apache Spark to study parking demand, violation behaviour and their relationship with traffic volume across the City of Melbourne — then tuning the reporting query that runs on top of it down from **13 minutes to under 4**.
+Processing **72.9 million on-street parking sensor records (9.2 GB)** with Apache Spark to study parking demand, violation behaviour and their relationship with traffic volume across the City of Melbourne, then tuning the reporting query that runs on top of it down from **13 minutes to under 4**.
 
 **Stack:** PySpark 4.1.1 (DataFrame API, Spark SQL, window functions, broadcast joins) · Catalyst plan inspection · Spark UI · matplotlib · Jupyter · Docker
 
@@ -22,11 +22,11 @@ Run locally on Spark 4.1.1 in a four-core Docker container (`local[4]`).
 
 The sensor extract is not analysis-ready. Three things had to be handled before any result could be trusted:
 
-**Schema inference is unsafe at this scale.** Both CSV sources and the nested JSON lookups are read with explicit `StructType` schemas. Letting Spark infer types means a second pass over 9.2 GB *and* silent coercion of malformed values — explicit schemas eliminate both.
+**Schema inference is unsafe at this scale.** Both CSV sources and the nested JSON lookups are read with explicit `StructType` schemas. Letting Spark infer types means a second pass over 9.2 GB *and* silent coercion of malformed values. Explicit schemas eliminate both.
 
 **Missing values hide behind placeholder strings.** `NA`, `N/A`, `NULL`, `-`, `?` and friends are normalised to real nulls before counting, otherwise the null audit reports clean columns that are not clean. The audit found 25,195,820 rows (35%) with no sign plate data and one area row with a missing name.
 
-**408 sessions have departure earlier than arrival.** Rather than dropping them unexamined, I broke them down by cause: 77 fall on daylight-saving transition days, 148 are negative by more than a full day, and 183 are neither. The three groups have different explanations — clock shift, date-field corruption, and likely sensor faults — so a single blanket rule would have been wrong. They are 0.0006% of the data and excluded from duration statistics.
+**408 sessions have departure earlier than arrival.** Rather than dropping them unexamined, I broke them down by cause: 77 fall on daylight-saving transition days, 148 are negative by more than a full day, and 183 are neither. The three groups have different explanations (clock shift, date-field corruption, and likely sensor faults), so a single blanket rule would have been wrong. They are 0.0006% of the data and excluded from duration statistics.
 
 ## Analysis
 
@@ -35,7 +35,7 @@ The sensor extract is not analysis-ready. Three things had to be handled before 
 - **Window functions** for high-turnover and long-stay bay rankings across 5,300 bays.
 - **Time-block join** of parking sessions against traffic counts on 10-minute blocks: 3,444,626 area-time blocks matched, of which 821,208 are above average on both measures at once.
 
-A sample of what comes out — Docklands carries the heaviest load by a wide margin, and its violation rate is *higher* in peak hours (6.48%) than off-peak (5.25%), while Jolimont shows the opposite pattern (2.74% peak vs 4.19% off-peak):
+A sample of what comes out. Docklands carries the heaviest load by a wide margin, and its violation rate is *higher* in peak hours (6.48%) than off-peak (5.25%), while Jolimont shows the opposite pattern (2.74% peak vs 4.19% off-peak):
 
 | AreaId | Area | Peak daily avg | Peak violation % | Off-peak daily avg | Off-peak violation % | Valid sessions |
 |---|---|---|---|---|---|---|
@@ -46,9 +46,9 @@ A sample of what comes out — Docklands carries the heaviest load by a wide mar
 
 ## The Optimisation
 
-The monthly top-five report was implemented twice — DataFrame API and Spark SQL — and verified equivalent with `exceptAll()` in **both** directions (0 rows each way). Spark compiled both to the same 38-operator plan, which is the expected result: they are two front-ends onto one Catalyst optimiser.
+The monthly top-five report was implemented twice, once with the DataFrame API and once in Spark SQL, then verified equivalent with `exceptAll()` in **both** directions (0 rows each way). Spark compiled both to the same 38-operator plan, which is the expected result: they are two front-ends onto one Catalyst optimiser.
 
-The Spark UI showed the cost was **not** shuffle — under 1 MiB moved. It was two full scans of the 9.2 GB input, because the monthly benchmark was being computed by re-aggregating the raw rows a second time.
+The Spark UI showed the cost was **not** shuffle: under 1 MiB moved. It was two full scans of the 9.2 GB input, because the monthly benchmark was being computed by re-aggregating the raw rows a second time.
 
 Replacing that second aggregation with a **window sum over the already-aggregated area-month counts** removes the second scan entirely. That single change is what produces the speed-up:
 
@@ -72,9 +72,9 @@ The Spark UI screenshots are embedded in the notebook, so it renders completely 
 
 ## Data
 
-The source data is not in this repository — `sensordata.csv` alone is 9.2 GB, far beyond GitHub's limits, and the datasets were supplied for coursework. They derive from the City of Melbourne's on-street parking sensor and vehicle count open data.
+The source data is not in this repository. `sensordata.csv` alone is 9.2 GB, far beyond GitHub's limits, and the datasets were supplied for coursework. They derive from the City of Melbourne's on-street parking sensor and vehicle count open data.
 
-To re-run the notebook, place `sensordata.csv`, `traffic_count.csv`, `area.json` and `street.json` next to it — the code reads them by bare filename — and run it from a directory where `screenshots/` is a sibling of the notebook.
+To re-run the notebook, place `sensordata.csv`, `traffic_count.csv`, `area.json` and `street.json` next to it, since the code reads them by bare filename, then run it from a directory where `screenshots/` is a sibling of the notebook.
 
 ## Notes
 
